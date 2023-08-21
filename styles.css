@@ -31,7 +31,19 @@ body {
   .button:hover {
     background-color: #0056b3;
   }
+
+  .delete{
+    background-color: transparent;
+    color: red;
+    border: none;
+  }
   
+  .delete-icon::before {
+    content: "\1F5D1"; 
+    font-size: 16px;
+    margin-right: 5px;
+  }
+
   /* File Explorer */
   ul {
     list-style-type: none;

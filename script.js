@@ -1,5 +1,13 @@
 let ref = null;
 
+const constructDirectory = (handle, nestedPath) => ({
+  name: handle.name,
+  kind: handle.kind,
+  relativePath: nestedPath,
+  entries: {},
+  handle,
+});
+
 const getDirectoryEntriesRecursive = async (
   directoryHandle,
   relativePath = "."
@@ -48,34 +56,54 @@ const getDirectoryEntriesRecursive = async (
   });
   return entries;
 };
-const changeRef = (newHandle) => {
+
+const createRow = (ul, item, depth)=>{
+  const li = document.createElement("li");
+
+  li.style.marginLeft = `${depth * 20}px`;
+
+  const icon = document.createElement("span");
+  icon.className = item.kind === "directory" ? "folder-icon" : "file-icon";
+
+  const name = document.createElement("span");
+  name.textContent = item.name;
+
+  if (item.kind === "directory"){
+    li.onclick = () => {
+      changeRef(item.handle);
+    };
+  }
+  const deleteButton = document.createElement("button");
+  deleteButton.onclick = async () => {
+    if(item.kind==='file'){
+      await item.handle.remove();
+    }else{
+      await item.handle.remove({recursive: true});
+    }
+    window.location.reload();
+  }
+  deleteButton.className="delete";
+  deleteButton.innerHTML=`<span class=delete-icon></span>`;
+  li.appendChild(icon);
+  li.appendChild(name);
+  li.appendChild(deleteButton)
+  ul.appendChild(li);
+  if (item.kind === "directory" && item.hasOwnProperty("entries")) {
+    generateFileTree(ul, item.entries, depth + 1);
+  }
+}
+
+const changeRef = async (newHandle) => {
   ref = newHandle;
 };
+
 const generateFileTree = (ul, data, depth = 0) => {
   for (const key in data) {
     if (data.hasOwnProperty(key)) {
       const item = data[key];
-      const li = document.createElement("li");
-
-      li.style.marginLeft = `${depth * 20}px`;
-
-      const icon = document.createElement("span");
-      icon.className = item.kind === "directory" ? "folder-icon" : "file-icon";
-
-      const name = document.createElement("span");
-      name.textContent = item.name;
-      if (item.kind === "directory")
-        li.onclick = () => {
-          changeRef(item.handle);
-        };
-      li.appendChild(icon);
-      li.appendChild(name);
-      ul.appendChild(li);
-      if (item.kind === "directory" && item.hasOwnProperty("entries")) {
-        generateFileTree(ul, item.entries, depth + 1);
+        createRow(ul,item,depth);
       }
     }
-  }
 };
 window.onload = async () => {
 
@@ -83,7 +111,7 @@ window.onload = async () => {
   const directoryHandle = await opfsRoot.getDirectoryHandle("root", {
     create: true,
   });
-
+  changeRef(directoryHandle)
   const createFileButton = document.getElementById("createFileButton");
   const createFolderButton = document.getElementById("createFolderButton");
 
@@ -92,11 +120,14 @@ window.onload = async () => {
   const rootFiles = await getDirectoryEntriesRecursive(directoryHandle);
 
   createFileButton.onclick = async () => {
+    const path = await opfsRoot.resolve(ref);
+    const depth = path.length - 1;
     const newRow = document.createElement("li");
     newRow.innerHTML = `
       <span class="file-icon"></span>
       <input type="text" class="new-file-input" placeholder="New File" autofocus>
     `;
+    newRow.style.marginLeft = `${depth * 20}px`;
     fileTreeView.appendChild(newRow);
 
     const inputField = newRow.querySelector(".new-file-input");
@@ -108,16 +139,23 @@ window.onload = async () => {
           <span class="file-icon"></span>
           <span>${fileName}</span>
         `;
-        const tmpHandle = await ref.getFileHandle(inputField.value, {
+        fileTreeView.removeChild(newRow)
+        const handle = await ref.getFileHandle(inputField.value, {
           create: true,
         });
+        const file = await handle.getFile();
+        file.handle = handle;
+        createRow(fileTreeView, file, depth)
         inputField.value = "";
       }
     });
   };
 
   createFolderButton.onclick = async () => {
+    const path = await opfsRoot.resolve(ref);
+    const depth = path.length - 1;
     const newRow = document.createElement("li");
+    newRow.style.marginLeft = `${depth * 20}px`;
     newRow.innerHTML = `
           <span class="folder-icon"></span>
           <input type="text" class="new-folder-input" placeholder="New Folder" autofocus>
@@ -127,15 +165,15 @@ window.onload = async () => {
     const inputField = newRow.querySelector(".new-folder-input");
     inputField.addEventListener("keyup", async function (event) {
       if (event.key === "Enter") {
+        fileTreeView.removeChild(newRow)
         event.preventDefault();
-        const fileName = inputField.value;
-        newRow.innerHTML = `
-              <span class="folder-icon"></span>
-              <span>${fileName}</span>
-            `;
-        const tmpHandle = await ref.getDirectoryHandle(inputField.value, {
+        const directoryName = inputField.value;
+        const handle = await ref.getDirectoryHandle(directoryName, {
           create: true,
         });
+        const nestedPath = path.join("/")
+        const directory = constructDirectory(handle, nestedPath)
+        createRow(fileTreeView, directory, depth)
         inputField.value = "";
       }
     });
