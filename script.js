@@ -49,7 +49,6 @@ const getDirectoryEntriesRecursive = async (
   return entries;
 };
 const changeRef = (newHandle) => {
-  console.log(newHandle)
   ref = newHandle;
 };
 const generateFileTree = (ul, data, depth = 0) => {
@@ -69,11 +68,8 @@ const generateFileTree = (ul, data, depth = 0) => {
         li.onclick = () => {
           changeRef(item.handle);
         };
-
       li.appendChild(icon);
       li.appendChild(name);
-      console.log(item.kind);
-
       ul.appendChild(li);
       if (item.kind === "directory" && item.hasOwnProperty("entries")) {
         generateFileTree(ul, item.entries, depth + 1);
