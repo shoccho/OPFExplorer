@@ -1,4 +1,23 @@
 let ref = null;
+let modal = null;
+let idx = 0;
+
+async function openModal(item) {
+  const file = await item.handle.getFile()
+  const text = await file.text();
+  const editor = document.getElementById('editor');
+  editor.value = text;  
+  modal.style.display = "block";
+  editor.onblur = async () => {
+    const writable = await item.handle.createWritable();
+    await writable.write(editor.value);
+    await writable.close();
+  }
+}
+
+function closeModal() {
+  modal.style.display = "none";
+}
 
 const constructDirectory = (handle, nestedPath) => ({
   name: handle.name,
@@ -15,7 +34,6 @@ const getDirectoryEntriesRecursive = async (
   const fileHandles = [];
   const directoryHandles = [];
   const entries = {};
-  // Get an iterator of the files and folders in the directory.
   const directoryIterator = directoryHandle.values();
   const directoryEntryPromises = [];
   for await (const handle of directoryIterator) {
@@ -57,7 +75,12 @@ const getDirectoryEntriesRecursive = async (
   return entries;
 };
 
-const createRow = (ul, item, depth)=>{
+function insertNodeAtIndex(parentElement, newNode, index) {
+  const referenceNode = parentElement.children[index];
+  parentElement.insertBefore(newNode, referenceNode);
+}
+
+const createRow = (ul, item, depth, height)=>{
   const li = document.createElement("li");
 
   li.style.marginLeft = `${depth * 20}px`;
@@ -71,7 +94,10 @@ const createRow = (ul, item, depth)=>{
   if (item.kind === "directory"){
     li.onclick = () => {
       changeRef(item.handle);
-    };
+      idx = li;
+    }
+  }else{
+    li.onclick = () => openModal(item);
   }
   const deleteButton = document.createElement("button");
   deleteButton.onclick = async () => {
@@ -86,8 +112,13 @@ const createRow = (ul, item, depth)=>{
   deleteButton.innerHTML=`<span class=delete-icon></span>`;
   li.appendChild(icon);
   li.appendChild(name);
-  li.appendChild(deleteButton)
-  ul.appendChild(li);
+  li.appendChild(deleteButton);
+  
+  if(height){
+    insertNodeAtIndex(ul,li,height);
+  }else{
+    ul.appendChild(li);
+  }
   if (item.kind === "directory" && item.hasOwnProperty("entries")) {
     generateFileTree(ul, item.entries, depth + 1);
   }
@@ -105,8 +136,8 @@ const generateFileTree = (ul, data, depth = 0) => {
       }
     }
 };
-window.onload = async () => {
 
+window.onload = async () => {
   const opfsRoot = await navigator.storage.getDirectory();
   const directoryHandle = await opfsRoot.getDirectoryHandle("root", {
     create: true,
@@ -118,6 +149,7 @@ window.onload = async () => {
   const fileTreeView = document.getElementById("fileTree");
 
   const rootFiles = await getDirectoryEntriesRecursive(directoryHandle);
+  modal = document.getElementById("myModal");
 
   createFileButton.onclick = async () => {
     const path = await opfsRoot.resolve(ref);
@@ -127,9 +159,15 @@ window.onload = async () => {
       <span class="file-icon"></span>
       <input type="text" class="new-file-input" placeholder="New File" autofocus>
     `;
+    
+    const nodes = fileTreeView.childNodes;
+    const childNodes = Array.from(nodes);
+    const height = typeof idx === "number" ? idx : childNodes.findIndex(childNode => childNode === idx);
+    
     newRow.style.marginLeft = `${depth * 20}px`;
-    fileTreeView.appendChild(newRow);
 
+    insertNodeAtIndex(fileTreeView, newRow, height)
+    
     const inputField = newRow.querySelector(".new-file-input");
     inputField.addEventListener("keyup", async function (event) {
       if (event.key === "Enter") {
@@ -145,7 +183,7 @@ window.onload = async () => {
         });
         const file = await handle.getFile();
         file.handle = handle;
-        createRow(fileTreeView, file, depth)
+        createRow(fileTreeView, file, depth, height)
         inputField.value = "";
       }
     });
@@ -179,4 +217,7 @@ window.onload = async () => {
     });
   };
   generateFileTree(fileTreeView, rootFiles);
+
+  const closeButton = document.querySelector(".close");
+  closeButton.addEventListener("click", closeModal);
 };
